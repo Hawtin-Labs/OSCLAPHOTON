@@ -1,7 +1,7 @@
 use nih_plug::prelude::*;
 
-use OSCLAP::OsClap;
+use OSCLAPHOTON::OsClaPhoton;
 
 fn main() {
-    nih_export_standalone::<OsClap>();
+    nih_export_standalone::<OsClaPhoton>();
 }

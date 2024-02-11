@@ -1,5 +1,5 @@
 [package]
-name = "OSCLAP"
+name = "OSCLAPHOTON"
 version = "0.1.0"
 edition = "2021"
 authors = ["VanTa <vanta.xyz>", "gamingrobot <https://github.com/gamingrobot>"]
@@ -17,7 +17,7 @@ nih_plug_vizia = { git = "https://github.com/robbert-vdh/nih-plug.git",  rev = "
 rosc = "0.10.1"
 crossbeam-channel = "0.5.4"
 parking_lot = "0.12.0"
-rubato = "0.14.1"
+# rubato = "0.14.1"
 anyhow = "1.0"
 swash = "0.1.12"
 
