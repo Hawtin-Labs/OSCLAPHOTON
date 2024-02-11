@@ -14,53 +14,53 @@ impl ParamView {
         //TODO handle param names
         Self.build(cx, |cx| {
             HStack::new(cx, |cx| {
-                Label::new(cx, "param1").class("label");
-                ParamSlider::new(cx, params, |params| &params.param1)
+                Label::new(cx, "Beams Nr").class("label");
+                ParamSlider::new(cx, params, |params| &params.beamNr)
                     .class("widget");
             })
             .class("row");
             HStack::new(cx, |cx| {
-                Label::new(cx, "param2").class("label");
-                ParamSlider::new(cx, params, |params| &params.param2)
+                Label::new(cx, "Rotation Speed").class("label");
+                ParamSlider::new(cx, params, |params| &params.rotSpeed)
                     .class("widget");
             })
             .class("row");
             HStack::new(cx, |cx| {
-                Label::new(cx, "param3").class("label");
-                ParamSlider::new(cx, params, |params| &params.param3)
+                Label::new(cx, "Beams Size").class("label");
+                ParamSlider::new(cx, params, |params| &params.beamSz)
                     .class("widget");
             })
             .class("row");
             HStack::new(cx, |cx| {
-                Label::new(cx, "param4").class("label");
-                ParamSlider::new(cx, params, |params| &params.param4)
+                Label::new(cx, "Zoom").class("label");
+                ParamSlider::new(cx, params, |params| &params.zoom)
                     .class("widget");
             })
             .class("row");
             HStack::new(cx, |cx| {
-                Label::new(cx, "param5").class("label");
-                ParamSlider::new(cx, params, |params| &params.param5)
+                Label::new(cx, "Zoom Speed").class("label");
+                ParamSlider::new(cx, params, |params| &params.zoomSp)
                     .class("widget");
             })
             .class("row");
             HStack::new(cx, |cx| {
-                Label::new(cx, "param6").class("label");
-                ParamSlider::new(cx, params, |params| &params.param6)
+                Label::new(cx, "Offset").class("label");
+                ParamSlider::new(cx, params, |params| &params.offset)
                     .class("widget");
             })
             .class("row");
-            HStack::new(cx, |cx| {
-                Label::new(cx, "param7").class("label");
-                ParamSlider::new(cx, params, |params| &params.param7)
-                    .class("widget");
-            })
-            .class("row");
-            HStack::new(cx, |cx| {
-                Label::new(cx, "param8").class("label");
-                ParamSlider::new(cx, params, |params| &params.param8)
-                    .class("widget");
-            })
-            .class("row");
+            // HStack::new(cx, |cx| {
+            //     Label::new(cx, "param7").class("label");
+            //     ParamSlider::new(cx, params, |params| &params.param7)
+            //         .class("widget");
+            // })
+            // .class("row");
+            // HStack::new(cx, |cx| {
+            //     Label::new(cx, "param8").class("label");
+            //     ParamSlider::new(cx, params, |params| &params.param8)
+            //         .class("widget");
+            // })
+            // .class("row");
         })
     }
 }
@@ -83,7 +83,7 @@ impl SettingsView {
     {
         Self.build(cx, |cx| {
             HStack::new(cx, |cx| {
-                Label::new(cx, "TD OSC Address").class("label");
+                Label::new(cx, "TD OSC IP").class("label");
                 Textbox::new(cx, settings.map(|settings| settings.osc_server_address.clone()))
                     .on_edit(move |cx, text| {
                         //TODO: validate
@@ -92,7 +92,7 @@ impl SettingsView {
                     .on_submit(|cx,  _, _| {
                         cx.emit(OsClaPhotonEditorEvent::ConnectionChange);
                     })
-                    .width(Pixels(115.0)); //180 - 60 - 5
+                    .width(Pixels(135.0)); // 200 = 135 + 60 + 5
                 Textbox::new(cx, settings.map(|settings| settings.osc_server_port))
                     .on_edit(move |cx, text| {
                         if let Ok(val) = text.parse::<u16>() {
@@ -119,7 +119,7 @@ impl SettingsView {
                     .on_submit(|cx,  _, _| {
                         cx.emit(OsClaPhotonEditorEvent::AddressBaseChange);
                     })
-                    .width(Pixels(180.0));
+                    .width(Pixels(200.0));
             })
             .class("row");
             // HStack::new(cx, |cx| {

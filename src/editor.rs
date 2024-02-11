@@ -121,6 +121,7 @@ pub(crate) fn create(
         VStack::new(cx, |cx| {
             Label::new(cx, "OSCLAPHOTON")
                 .font_size(40.0 * POINT_SCALE)
+                .left(Units::Pixels(5.0))
                 .class("title");
             HStack::new(cx, |cx| {
                 SettingsView::new(cx, OsClaPhotonEditor::settings, OsClaPhotonEditor::params, OsClaPhotonEditor::log);
