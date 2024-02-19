@@ -13,21 +13,26 @@ impl ParamView {
     {
         //TODO handle param names
         Self.build(cx, |cx| {
+            //ToDo: Control enum params:
+            //https://github.com/vizia/vizia/blob/main/examples/views/dropdown.rs
+            //https://monadical.com/posts/shades-of-rust-gui-library-list.html#11-Vizia
+            //https://github.com/robbert-vdh/nih-plug/blob/master/nih_plug_vizia/src/widgets/param_button.rs
+            //https://github.com/robbert-vdh/nih-plug/blob/master/src/params/enums.rs
             HStack::new(cx, |cx| {
                 Label::new(cx, "Beams Nr").class("label");
-                ParamSlider::new(cx, params, |params| &params.beamNr)
+                ParamSlider::new(cx, params, |params| &params.beam_number)
                     .class("widget");
             })
             .class("row");
             HStack::new(cx, |cx| {
                 Label::new(cx, "Rotation Speed").class("label");
-                ParamSlider::new(cx, params, |params| &params.rotSpeed)
+                ParamSlider::new(cx, params, |params| &params.rot_speed)
                     .class("widget");
             })
             .class("row");
             HStack::new(cx, |cx| {
                 Label::new(cx, "Beams Size").class("label");
-                ParamSlider::new(cx, params, |params| &params.beamSz)
+                ParamSlider::new(cx, params, |params| &params.beam_size)
                     .class("widget");
             })
             .class("row");
@@ -39,7 +44,7 @@ impl ParamView {
             .class("row");
             HStack::new(cx, |cx| {
                 Label::new(cx, "Zoom Speed").class("label");
-                ParamSlider::new(cx, params, |params| &params.zoomSp)
+                ParamSlider::new(cx, params, |params| &params.zoom_speed)
                     .class("widget");
             })
             .class("row");
@@ -49,6 +54,9 @@ impl ParamView {
                     .class("widget");
             })
             .class("row");
+
+
+
             // HStack::new(cx, |cx| {
             //     Label::new(cx, "param7").class("label");
             //     ParamSlider::new(cx, params, |params| &params.param7)

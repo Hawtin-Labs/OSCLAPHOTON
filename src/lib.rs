@@ -11,9 +11,16 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
+use array_const_fn_init::array_const_fn_init;
 
 mod editor;
 mod subviews;
+
+const NUM_PARAMS:usize = 8;
+const fn const_add_one(i: usize) -> usize {
+    i + 1
+}
+const INDEXES: [usize; NUM_PARAMS] = array_const_fn_init![const_add_one; 8];
 
 pub struct OsClaPhoton {
     params: Arc<OsClaPhotonParams>,
@@ -21,13 +28,19 @@ pub struct OsClaPhoton {
     sender: Arc<Sender<OscChannelMessageType>>,
     receiver: Option<Receiver<OscChannelMessageType>>,
     editor_state: Arc<ViziaState>,
-
-    beamNr_dirty: Arc<AtomicBool>,
-    rotSpeed_dirty: Arc<AtomicBool>,
-    beamSz_dirty: Arc<AtomicBool>,
+    //Control
+    control_dirty: Arc<AtomicBool>,
+    shutter_dirty: Arc<AtomicBool>,
+    rotation_dirty: Arc<AtomicBool>,
+    //Globals
+    beam_number_dirty: Arc<AtomicBool>,
+    rot_speed_dirty: Arc<AtomicBool>,
+    beam_size_dirty: Arc<AtomicBool>,
     zoom_dirty: Arc<AtomicBool>,
-    zoomSp_dirty: Arc<AtomicBool>,
+    zoom_speed_dirty: Arc<AtomicBool>,
     offset_dirty: Arc<AtomicBool>,
+
+    prev_params: [[f32; 5]; NUM_PARAMS],
 
     //ToDo:
     //tilts params
@@ -54,34 +67,44 @@ pub struct OsClaPhoton {
 
 impl Default for OsClaPhoton {
     fn default() -> Self {
-
-        let beamNr_dirty = Arc::new(AtomicBool::new(false));
-        let rotSpeed_dirty = Arc::new(AtomicBool::new(false));
-        let beamSz_dirty = Arc::new(AtomicBool::new(false));
+        let control_dirty = Arc::new(AtomicBool::new(false));
+        let shutter_dirty = Arc::new(AtomicBool::new(false));
+        let rotation_dirty = Arc::new(AtomicBool::new(false));
+        let beam_number_dirty = Arc::new(AtomicBool::new(false));
+        let rot_speed_dirty = Arc::new(AtomicBool::new(false));
+        let beam_size_dirty = Arc::new(AtomicBool::new(false));
         let zoom_dirty = Arc::new(AtomicBool::new(false));
-        let zoomSp_dirty = Arc::new(AtomicBool::new(false));
+        let zoom_speed_dirty = Arc::new(AtomicBool::new(false));
         let offset_dirty = Arc::new(AtomicBool::new(false));
 
         let channel = OscChannel::default();
         Self {
             params: Arc::new(OsClaPhotonParams::new(
-                beamNr_dirty.clone(),
-                rotSpeed_dirty.clone(),
-                beamSz_dirty.clone(),
+
+            control_dirty.clone(),
+            shutter_dirty.clone(),
+            rotation_dirty.clone(),
+                beam_number_dirty.clone(),
+                rot_speed_dirty.clone(),
+                beam_size_dirty.clone(),
                 zoom_dirty.clone(),
-                zoomSp_dirty.clone(),
+                zoom_speed_dirty.clone(),
                 offset_dirty.clone(),
             )),
             osc_thread: None,
             sender: Arc::new(channel.sender),
             receiver: Some(channel.receiver),
             editor_state: editor::default_state(),
-            beamNr_dirty,
-            rotSpeed_dirty,
-            beamSz_dirty,
+            control_dirty,
+            shutter_dirty,
+            rotation_dirty,
+            beam_number_dirty,
+            rot_speed_dirty,
+            beam_size_dirty,
             zoom_dirty,
-            zoomSp_dirty,
+            zoom_speed_dirty,
             offset_dirty,
+            prev_params: [[0.0; 5]; NUM_PARAMS],
         }
     }
 }
@@ -143,36 +166,105 @@ pub struct OsClaPhotonParams {
     // #[id = "osc_sample_rate"]
     // osc_sample_rate: IntParam,
 
-    //Exposed Params
+    //Exposed Control Params
+    #[id = "control"]
+    control: EnumParam<Control>,
+    #[id = "shutter"]
+    shutter: EnumParam<Shutter>,
+    #[id = "rotation"]
+    rotation: EnumParam<RotationControl>,
+
+    //Exposed Global Params
     #[id = "beamNr"]
-    beamNr: FloatParam,
+    beam_number: FloatParam,
     #[id = "rotSpeed"]
-    rotSpeed: FloatParam,
+    rot_speed: FloatParam,
     #[id = "beamSz"]
-    beamSz: FloatParam,
+    beam_size: FloatParam,
     #[id = "zoom"]
     zoom: FloatParam,
     #[id = "zoomSp"]
-    zoomSp: FloatParam,
+    zoom_speed: FloatParam,
     #[id = "offset"]
     offset: FloatParam,
+
+    #[nested(array, group = "Tilt Parameters")]
+    tilt_params: [TiltParams; NUM_PARAMS],
+}
+
+
+#[derive(Enum, Debug, PartialEq)]
+enum Control {
+    #[id = "off"]
+    Off,
+    #[id = "normal"]
+    Normal,
+    #[id = "fast"]
+    Fast,
+    #[id = "resetall"]
+    ResetAll,
+    #[id = "resetmotor"]
+    ResetMotor,
+    #[id = "resetsource"]
+    ResetSource,
+}
+
+#[derive(Enum, Debug, PartialEq)]
+enum Shutter {
+    #[id = "shutterclosed"]
+    Closed,
+    #[id = "shutterbpm"]
+    BPM,
+    #[id = "shutteropen"]
+    Open,
+}
+
+#[derive(Enum, Debug, PartialEq)]
+enum RotationControl {
+    #[id = "clockwise"]
+    ClockWise,
+    #[id = "counterclockwise"]
+    CounterClockWise,
+    #[id = "rotationstop"]
+    RotationStop,
+    #[id = "rotationreset"]
+    RotationReset,
+}
+
+#[derive(Params)]
+struct TiltParams {
+    /// This parameter's ID will get a `_1`, `_2`, and a `_3` suffix because of how it's used in
+    /// `osc_params` above.
+    #[id = "tilt"]
+    pub tilt: FloatParam,
+    #[id = "dimmer"]
+    pub dimmer: FloatParam,
+    #[id = "red"]
+    pub red: FloatParam,
+    #[id = "green"]
+    pub green: FloatParam,
+    #[id = "blue"]
+    pub blue: FloatParam,
 }
 
 impl OsClaPhotonParams {
     #[allow(clippy::derivable_impls)]
     fn new(
-        beamNr_dirty: Arc<AtomicBool>,
-        rotSpeed_dirty: Arc<AtomicBool>,
-        beamSz_dirty: Arc<AtomicBool>,
+        control_dirty: Arc<AtomicBool>,
+        shutter_dirty: Arc<AtomicBool>,
+        rotation_dirty: Arc<AtomicBool>,
+        beam_number_dirty: Arc<AtomicBool>,
+        rot_speed_dirty: Arc<AtomicBool>,
+        beam_size_dirty: Arc<AtomicBool>,
         zoom_dirty: Arc<AtomicBool>,
-        zoomSp_dirty: Arc<AtomicBool>,
+        zoom_speed_dirty: Arc<AtomicBool>,
         offset_dirty: Arc<AtomicBool>,
 
     ) -> Self {
         Self {
             osc_server_address: RwLock::new("255.255.255.255".to_string()),
             osc_server_port: RwLock::new(12345),
-            osc_address_base: RwLock::new("osclaphoton".to_string()),
+            osc_address_base: RwLock::new("photon_1".to_string()),
             // flag_send_midi: BoolParam::new("flag_send_midi", true)
             //     .hide()
             //     .non_automatable(),
@@ -188,24 +280,69 @@ impl OsClaPhotonParams {
             // .hide()
             // .non_automatable(),
 
-            beamNr: FloatParam::new("Beams Number", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+            control: EnumParam::new("Control", Control::Fast)
+                .with_callback(Arc::new(move |_x| control_dirty.store(true, Ordering::Release))),
+            shutter: EnumParam::new("Shutter", Shutter::Open)
+                .with_callback(Arc::new(move |_x| shutter_dirty.store(true, Ordering::Release))),
+            rotation: EnumParam::new("Rotation", RotationControl::RotationStop)
+                .with_callback(Arc::new(move |_x| rotation_dirty.store(true, Ordering::Release))),
+
+            beam_number: FloatParam::new("Beams Number", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_step_size(0.01)
-                .with_callback(Arc::new(move |_x| beamNr_dirty.store(true, Ordering::Release))),
-            rotSpeed: FloatParam::new("Rotation Speed", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_callback(Arc::new(move |_x| beam_number_dirty.store(true, Ordering::Release))),
+            rot_speed: FloatParam::new("Rotation Speed", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_step_size(0.0001)
-                .with_callback(Arc::new(move |_x| rotSpeed_dirty.store(true, Ordering::Release))),
-            beamSz: FloatParam::new("Beams Size", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_callback(Arc::new(move |_x| rot_speed_dirty.store(true, Ordering::Release))),
+            beam_size: FloatParam::new("Beams Size", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_step_size(0.0001)
-                .with_callback(Arc::new(move |_x| beamSz_dirty.store(true, Ordering::Release))),
+                .with_callback(Arc::new(move |_x| beam_size_dirty.store(true, Ordering::Release))),
             zoom: FloatParam::new("Zoom", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_step_size(0.0001)
                 .with_callback(Arc::new(move |_x| zoom_dirty.store(true, Ordering::Release))),
-            zoomSp: FloatParam::new("Zoom Speed", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+            zoom_speed: FloatParam::new("Zoom Speed", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_step_size(0.0001)
-                .with_callback(Arc::new(move |_x| zoomSp_dirty.store(true, Ordering::Release))),
+                .with_callback(Arc::new(move |_x| zoom_speed_dirty.store(true, Ordering::Release))),
             offset: FloatParam::new("Offset", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_step_size(0.0001)
                 .with_callback(Arc::new(move |_x| offset_dirty.store(true, Ordering::Release))),
+
+            //Tilts 
+            tilt_params: INDEXES.map(|index | TiltParams {
+                tilt: FloatParam::new(
+                    format!("Tilt {index}"),
+                    0.0,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_step_size(0.0001),
+
+                dimmer: FloatParam::new(
+                    format!("Dimmer {index}"),
+                    1.0,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_step_size(0.0001),
+
+                red: FloatParam::new(
+                    format!("Red {index}"),
+                    1.0,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_step_size(0.0001),
+
+                green: FloatParam::new(
+                    format!("Green {index}"),
+                    0.0,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_step_size(0.0001),
+
+                blue: FloatParam::new(
+                    format!("Blue {index}"),
+                    0.0,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_step_size(0.0001),  
+            }),
             
         }
     }
@@ -213,7 +350,7 @@ impl OsClaPhotonParams {
 
 impl Plugin for OsClaPhoton {
     const NAME: &'static str = "OSCLAPHOTON";
-    const VENDOR: &'static str = "VanTa @Hawtin Labs";
+    const VENDOR: &'static str = "Hawtin Labs";
     const URL: &'static str = "https://github.com/Hawtin-Labs/OSCLAPHOTON";
     const EMAIL: &'static str = "";
 
@@ -280,7 +417,7 @@ impl Plugin for OsClaPhoton {
             );
             nih_trace!("Connecting: {}", ip_port);
             
-            socket.set_broadcast(true);
+            let _ = socket.set_broadcast(true);
 
             let connect_result = socket.connect(&ip_port);
             if connect_result.is_err() {
@@ -349,26 +486,153 @@ impl Plugin for OsClaPhoton {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        //Process Dirty Params
-        let param_result = self.process_params();
+
+        //Process Dirty Control Params
+        if self.control_dirty
+            .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            //nih_trace!("Param Dirty: {} {}", self.params.control.name(), self.params.control.value());
+            let _ = self.sender
+                .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.control.name().to_string(), //TODO: allocation
+                    value: self.params.control.value().to_index() as f32,
+                }));
+        }
+
+        if self.shutter_dirty
+            .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            //nih_trace!("Param Dirty: {} {}", self.params.shutter.name(), self.params.shutter.value());
+            let _ = self.sender
+                .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.shutter.name().to_string(), //TODO: allocation
+                    value: self.params.shutter.value().to_index() as f32,
+                }));
+        }
+
+        if self.rotation_dirty
+            .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            //nih_trace!("Param Dirty: {} {}", self.params.rotation.name(), self.params.rotation.value());
+            let _ = self.sender
+                .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.rotation.name().to_string(), //TODO: allocation
+                    value: self.params.rotation.value().to_index() as f32,
+                }));
+        }
+
+        //Process Dirty Global Params
+        let param_result = self.process_global_params();
         if param_result.is_err() {
             nih_error!("Failed to send params {:?}", param_result.unwrap_err());
         }
+
+        let mut param_temp: f32 = 0.0; //self.params[idx].value();
+        for idx in 0..NUM_PARAMS {
+            //self.send_tilt_param(&val, &self.params.tilt_params[idx])
+
+            //tilt
+            param_temp = self.params.tilt_params[idx].tilt.value();
+            if param_temp != self.prev_params[idx][0]
+            {
+                let _ = self.sender
+                    .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.tilt_params[idx].tilt.name().to_string(), //TODO: allocation
+                    value: self.params.tilt_params[idx].tilt.value(),
+                }));
+            }
+            self.prev_params[idx][0] = param_temp;
+
+            //dimmer
+            param_temp = self.params.tilt_params[idx].dimmer.value();
+            if param_temp != self.prev_params[idx][1]
+            {
+                let _ = self.sender
+                    .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.tilt_params[idx].dimmer.name().to_string(),
+                    value: self.params.tilt_params[idx].dimmer.value(),
+                }));
+            }
+            self.prev_params[idx][1] = param_temp;
+
+            //red
+            param_temp = self.params.tilt_params[idx].red.value();
+            if param_temp != self.prev_params[idx][2]
+            {
+                let _ = self.sender
+                    .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.tilt_params[idx].red.name().to_string(),
+                    value: self.params.tilt_params[idx].red.value(),
+                }));
+            }
+            self.prev_params[idx][2] = param_temp;
+
+            //green
+            param_temp = self.params.tilt_params[idx].green.value();
+            if param_temp != self.prev_params[idx][3]
+            {
+                let _ = self.sender
+                    .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.tilt_params[idx].green.name().to_string(),
+                    value: self.params.tilt_params[idx].green.value(),
+                }));
+            }
+            self.prev_params[idx][3] = param_temp;
+
+            //blue
+            param_temp = self.params.tilt_params[idx].blue.value();
+            if param_temp != self.prev_params[idx][4]
+            {
+                let _ = self.sender
+                    .send(OscChannelMessageType::Param(OscParamType {
+                    name: self.params.tilt_params[idx].blue.name().to_string(),
+                    value: self.params.tilt_params[idx].blue.value(),
+                }));
+            }
+            self.prev_params[idx][4] = param_temp;
+           
+        };
+
+
+
         ProcessStatus::Normal
     }
 }
 
 impl OsClaPhoton {
-    fn process_params(&self) -> Result<()> {
+    // fn process_control_params(&self) -> Result<()> {
 
-        self.send_dirty_param(&self.beamNr_dirty, &self.params.beamNr)?;
-        self.send_dirty_param(&self.rotSpeed_dirty, &self.params.rotSpeed)?;
-        self.send_dirty_param(&self.beamSz_dirty, &self.params.beamSz)?;
+    //     self.send_dirty_control_param(&self.control_dirty, &self.params.control)?;
+    //     self.send_dirty_control_param(&self.shutter_dirty, &self.params.shutter)?;
+    //     self.send_dirty_control_param(&self.rotation_dirty, &self.params.rotation)?;
+    //     Ok(())
+    // }
+    // fn send_dirty_control_param(&self, param_dirty: &Arc<AtomicBool>, param: &EnumParam) -> Result<()> {
+    //     if param_dirty
+    //         .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+    //         .is_ok()
+    //     {
+    //         nih_trace!("Param Dirty: {} {}", param.name(), param.value());
+    //         self.sender
+    //             .send(OscChannelMessageType::Param(OscParamType {
+    //                 name: param.name().to_string(), //TODO: allocation
+    //                 value: param.value(),
+    //             }))?;
+    //     }
+    //     Ok(())
+    // }
+
+    fn process_global_params(&self) -> Result<()> {
+
+        self.send_dirty_param(&self.beam_number_dirty, &self.params.beam_number)?;
+        self.send_dirty_param(&self.rot_speed_dirty, &self.params.rot_speed)?;
+        self.send_dirty_param(&self.beam_size_dirty, &self.params.beam_size)?;
         self.send_dirty_param(&self.zoom_dirty, &self.params.zoom)?;
-        self.send_dirty_param(&self.zoomSp_dirty, &self.params.zoomSp)?;
+        self.send_dirty_param(&self.zoom_speed_dirty, &self.params.zoom_speed)?;
         self.send_dirty_param(&self.offset_dirty, &self.params.offset)?;
-
-
         Ok(())
     }
 
@@ -386,6 +650,48 @@ impl OsClaPhoton {
         }
         Ok(())
     }
+
+
+
+    // fn process_titl_params(&self) -> Result<()>{
+    //     let mut param_temp: f32 = 0.0; //self.params[idx].value();
+    //     for idx in 0..NUM_PARAMS {
+    //         //self.send_tilt_param(&val, &self.params.tilt_params[idx])
+
+    //         //tilt
+    //         param_temp = self.params.tilt_params[idx].tilt.value();
+    //         if param_temp != self.prev_params[idx][0]
+    //         {
+    //             let _ = self.sender
+    //                 .send(OscChannelMessageType::Param(OscParamType {
+    //                 name: self.params.tilt_params[idx].tilt.name().to_string(), //TODO: allocation
+    //                 value: self.params.tilt_params[idx].tilt.value(),
+    //             }));
+    //         }
+        
+    //     self.prev_params[idx][0] = param_temp;
+            
+    //     };
+
+    //     Ok(())
+    // }
+
+    // fn send_tilt_param(&self, param_temp: f32, param_group: &TiltParams) -> Result<()> {
+
+    //     param_temp = param_group.tilt.value();
+    //     //tilt
+    //     if param_temp != self.prev_params[idx][0]
+    //     {
+    //         let _ = self.sender
+    //         .send(OscChannelMessageType::Param(OscParamType {
+    //             name: self.params.osc_params[idx].osc_param.name().to_string(), //TODO: allocation
+    //             value: self.params.osc_params[idx].osc_param.value(),
+    //         }));
+    //     }
+    //     self.prev_params[idx] = param_temp;
+
+    //     Ok(())
+    // }
 
     fn kill_background_thread(&mut self) {
         let exit_result = self.sender.send(OscChannelMessageType::Exit);
